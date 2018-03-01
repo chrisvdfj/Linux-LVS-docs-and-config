@@ -1,0 +1,99 @@
+#!/bin/sh
+
+# Script by chris@chilempresas.cl @2002
+# Feel free to distribute this program over the InFeRnEt!
+# :)
+
+# Clear iptables Chains
+
+iptables -F
+iptables -F -t nat
+iptables -X
+iptables -X -t nat
+
+#/sbin/insmod /lib/modules/2.4.18/kernel/net/ipv4/netfilter/iptable_filter.o
+#/sbin/insmod /lib/modules/2.4.18/kernel/net/ipv4/netfilter/ip_conntrack.o
+#/sbin/insmod /lib/modules/2.4.18/kernel/net/ipv4/netfilter/ip_conntrack_ftp.o
+/sbin/insmod /lib/modules/2.4.18/kernel/net/ipv4/netfilter/ip_nat_ftp.o
+
+
+######## sysctl ##########
+#Disabling IP Spoofing attacks.
+#echo 2 > /proc/sys/net/ipv4/conf/all/rp_filter
+#Don't respond to broadcast pings (Smurf-Amplifier-Protection)
+#echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+#Block source routing
+#echo 0 > /proc/sys/net/ipv4/conf/all/accept_source_route
+#Kill timestamps
+#echo 0 > /proc/sys/net/ipv4/tcp_timestamps
+#Enable SYN Cookies
+#echo 1 > /proc/sys/net/ipv4/tcp_syncookies
+#Kill redirects
+#echo 1 > /proc/sys/net/ipv4/conf/all/accept_redirects
+#echo 1 > /proc/sys/net/ipv4/conf/all/accept_source_route
+#Enable bad error message protection
+#echo 1 > /proc/sys/net/ipv4/icmp_ignore_bogus_error_responses
+
+
+######### nat ############
+iptables -F FORWARD
+iptables -A FORWARD -j ACCEPT -i eth0 -o eth1 -d 172.16.10.0/24
+iptables -A FORWARD -j ACCEPT -i eth1 -o eth0 -s 172.16.10.0/24
+
+
+##########################
+##### deny/allow nat #####
+##########################
+
+#iptables -t nat -A PREROUTING -i eth1 -p tcp -s 127.18.10.0/24 -d 0.0.0.0/0 --dport 110 -j ACCEPT
+
+#iptables -t nat -A PREROUTING -i eth1 -p tcp -s 172.16.10.0/24 -d 0.0.0.0/0 --dport 110 -j DROP
+
+##########################
+##########################
+##########################
+
+        ##########################
+
+iptables -t nat -F POSTROUTING
+iptables -t nat -A POSTROUTING -j MASQUERADE -o eth0
+##########################
+
+#### LOOP traffic accept #
+iptables -A INPUT  -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+##########################
+
+
+
+########## syn ###########
+
+iptables -N syn-flood
+iptables -A INPUT -i eth0 -p tcp --syn -j syn-flood
+iptables -A INPUT -i eth1 -p tcp --syn -j syn-flood
+iptables -A syn-flood -m limit --limit 1/s --limit-burst 4 -j RETURN
+iptables -A syn-flood -j DROP
+
+####### fragments ########
+
+iptables -A INPUT -i eth0 -f -j DROP
+iptables -A INPUT -i eth1 -f -j DROP
+
+######## loop/broadcast ##
+
+iptables -A INPUT  -i eth0 -d 127.0.0.1 -j DROP
+iptables -A INPUT  -i eth1 -d 127.0.0.1 -j DROP
+#iptables -A INPUT -i eth0 -d $BROADCAST -j DROP
+#iptables -A INPUT -i eth1 -d $BROADCAST -j DROP
+#iptables -A INPUT -i eth0 -p icmp -j DROP
+#iptables -A OUTPUT -o eth1 -p icmp -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+
+
+
+####################################
+######## LOAD BALANCING STUFF ######
+####################################
+
+/fw/ipvs-standalone.sh
+
+

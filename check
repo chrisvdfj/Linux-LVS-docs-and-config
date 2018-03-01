@@ -1,0 +1,89 @@
+#!/bin/sh
+
+
+service10=`/usr/bin/nmap 172.16.10.10 -p1000 -P0 -T5 -n|grep cadlock|cut -f2 -d"p"`
+service20=`/usr/bin/nmap 172.16.10.20 -p1000 -P0 -T5 -n|grep cadlock|cut -f2 -d"p"`
+service30=`/usr/bin/nmap 172.16.10.30 -p1000 -P0 -T5 -n|grep cadlock|cut -f2 -d"p"`
+service40=`/usr/bin/nmap 172.16.10.40 -p1000 -P0 -T5 -n|grep cadlock|cut -f2 -d"p"`
+
+
+if [ -z $service10 ] || [ -z $service20 ] || [ -z $service30 ] || [ -z $service40 ]; then
+
+        e=`cat /fw/error|cut -f1`;
+
+        if [ $e = "0" ]; then
+
+                echo "" > mailautomatico
+
+                if [ -z $service10 ]; then
+                echo "Stacker 172.16.10.10:1000 down" >> /fw/mailautomatico ;
+                elif [ -n $service10 ]; then
+                echo "172.16.10.10:1000" >> /fw/stacker_server_temp ;
+                fi
+
+                if [ -z $service20 ]; then
+                echo "Stacker 172.16.10.20:1000 down" >> /fw/mailautomatico ;
+                elif [ -n $service20 ]; then
+                echo "172.16.10.20:1000" >> /fw/stacker_server_temp ;
+                fi
+
+                if [ -z $service30 ]; then
+                echo "Stacker 172.16.10.30:1000 down" >> /fw/mailautomatico ;
+                elif [ -n $service30 ]; then
+                echo "172.16.10.30:1000" >> /fw/stacker_server_temp ;
+                fi
+
+                if [ -z $service40 ]; then
+                echo "Stacker 172.16.10.40:1000 down" >> /fw/mailautomatico ;
+                elif [ -n $service40 ]; then
+                echo "172.16.10.40:1000" >> /fw/stacker_server_temp ;
+                fi
+
+
+                /bin/mail chris@chequecompra.cl < /fw/mailautomatico
+
+
+                /sbin/ipvsadm -C
+                /sbin/ipvsadm -A -t 204.231.179.36:80 -s wlc
+                /sbin/ipvsadm -a -t 204.231.179.36:80 -r 172.16.10.50:80 -m
+
+
+                for i in `cat /fw/virtual_ip`
+                do
+                /sbin/ipvsadm -A -t $i -s wlc
+                                for ii in `cat /fw/stacker_server_temp`
+                                do
+                                /sbin/ipvsadm -a -t $i -r $ii -m
+                                done
+                done
+
+
+                /bin/rm /fw/stacker_server_temp
+                echo "1" > /fw/error
+
+        else echo "1" > /fw/error ;
+
+        fi
+
+else
+        e=`cat /fw/error|cut -f1`;
+        if [ $e = "1" ]; then
+                echo "All Stackers on line!"
+                 echo "0" > /fw/error
+                /sbin/ipvsadm -C
+                /sbin/ipvsadm -A -t 204.231.179.36:80 -s wlc
+                /sbin/ipvsadm -a -t 204.231.179.36:80 -r 172.16.10.50:80 -m
+
+                for i in `cat /fw/virtual_ip`
+                do
+                        /sbin/ipvsadm -A -t $i -s wlc
+                                for ii in `cat /fw/stacker_server`
+                                do
+                                /sbin/ipvsadm -a -t $i -r $ii -m
+                                done
+                done
+
+        fi
+fi
+
+
